@@ -1,5 +1,6 @@
 # How to Run
 
+<<<<<<< HEAD
 ## Backend Setup
 
 ```bash
@@ -17,3 +18,14 @@ cd frontend
 npm install
 npm run dev
 ```
+=======
+new terminal
+
+`cd frontend`
+`npm install`
+`npm run dev`
+
+Notes:
+- have to test canvas connection
+- have to setup our google api for google cal
+>>>>>>> a74673deb88e9d96b34e209d491b461cca759d4c

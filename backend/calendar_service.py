@@ -1,12 +1,17 @@
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow, InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 import os
 import json
+import secrets
+from dotenv import load_dotenv
 from schemas import StudyTask, CalendarEventResponse
+
+# Load environment variables
+load_dotenv()
 
 
 class CalendarService:
@@ -19,6 +24,7 @@ class CalendarService:
         self.creds = None
         self.service = None
         self.calendar_id = 'primary'  # Use primary calendar by default
+        self.oauth_flow = None
         
         # Color IDs for different priorities
         self.color_map = {
@@ -26,6 +32,99 @@ class CalendarService:
             'medium': '5',     # Yellow
             'low': '10'        # Green
         }
+        
+        # OAuth configuration
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            raise ValueError("Missing required Google OAuth credentials. Please check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env")
+            
+        self.client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/google/auth/callback")]
+            }
+        }
+    
+    async def get_authorization_url(self) -> str:
+        """
+        Generate Google OAuth authorization URL
+        
+        Returns:
+            str: Authorization URL for user to visit
+        """
+        try:
+            # Create flow instance with explicit redirect URI
+            redirect_uri = "http://localhost:8000/google/auth/callback"
+            self.oauth_flow = Flow.from_client_config(
+                self.client_config,
+                scopes=self.SCOPES,
+                redirect_uri=redirect_uri
+            )
+            
+            # Generate authorization URL with state for CSRF protection
+            authorization_url, state = self.oauth_flow.authorization_url(
+                access_type='offline',
+                include_granted_scopes='true',
+                prompt='consent'  # Force consent screen to get refresh token
+            )
+            
+            return authorization_url
+            
+        except Exception as e:
+            print(f"Error generating authorization URL: {e}")
+            raise
+    
+    async def handle_oauth_callback(self, code: str, state: Optional[str] = None) -> dict:
+        """
+        Handle OAuth callback and exchange code for credentials
+        
+        Args:
+            code: Authorization code from Google
+            state: State parameter for CSRF protection
+            
+        Returns:
+            dict: Credentials dictionary
+        """
+        try:
+            if not self.oauth_flow:
+                # Recreate flow if needed with explicit redirect URI
+                redirect_uri = "http://localhost:8000/google/auth/callback"
+                self.oauth_flow = Flow.from_client_config(
+                    self.client_config,
+                    scopes=self.SCOPES,
+                    redirect_uri=redirect_uri
+                )
+            
+            # Exchange authorization code for credentials
+            self.oauth_flow.fetch_token(code=code)
+            
+            # Get credentials
+            credentials = self.oauth_flow.credentials
+            
+            # Convert to dictionary for storage
+            creds_dict = {
+                'token': credentials.token,
+                'refresh_token': credentials.refresh_token,
+                'token_uri': credentials.token_uri,
+                'client_id': credentials.client_id,
+                'client_secret': credentials.client_secret,
+                'scopes': credentials.scopes
+            }
+            
+            # Store credentials
+            self.creds = credentials
+            self.service = build('calendar', 'v3', credentials=self.creds)
+            
+            return creds_dict
+            
+        except Exception as e:
+            print(f"OAuth callback error: {e}")
+            raise
     
     async def authenticate(self, credentials: dict) -> bool:
         """

@@ -4,6 +4,14 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+from fastapi.responses import RedirectResponse
+import urllib.parse
+import base64
+import json
 
 from canvas_service import CanvasService
 from gemini_service import GeminiService
@@ -222,10 +230,43 @@ async def complete_study_plan():
         raise HTTPException(status_code=500, detail=f"Failed to complete study plan: {str(e)}")
 
 
+@app.get("/google/auth/url")
+async def get_google_auth_url():
+    """
+    Get Google OAuth authorization URL
+    """
+    try:
+        auth_url = await calendar_service.get_authorization_url()
+        return {"auth_url": auth_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate auth URL: {str(e)}")
+
+
+@app.get("/google/auth/callback")
+async def google_auth_callback(code: str, state: Optional[str] = None):
+    """
+    Handle Google OAuth callback
+    """
+    try:
+        # Exchange code for credentials
+        credentials = await calendar_service.handle_oauth_callback(code, state)
+
+        # Serialize credentials to a URL-safe base64 string and redirect to frontend
+        # Use FRONTEND_URL env var if provided, otherwise default to Vite dev URL
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        creds_json = json.dumps(credentials)
+        token = base64.urlsafe_b64encode(creds_json.encode()).decode()
+        # Put token in fragment to avoid it being sent to backend in future requests
+        redirect_url = f"{frontend_url}/#google_auth={urllib.parse.quote(token)}"
+        return RedirectResponse(url=redirect_url)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
+
+
 @app.post("/google/authenticate")
 async def authenticate_google(auth_request: GoogleAuthRequest):
     """
-    Authenticate with Google Calendar using OAuth 2.0
+    Authenticate with Google Calendar using OAuth 2.0 credentials
     """
     try:
         is_valid = await calendar_service.authenticate(auth_request.credentials)
