@@ -1,33 +1,62 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
+import { canvasAPI } from './services/api';
 import './App.css';
 
 function App() {
   const [canvasAuth, setCanvasAuth] = useState(null);
   const [googleAuth, setGoogleAuth] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Load saved auth from localStorage on mount
+  // Load saved auth from localStorage on mount and re-authenticate
   useEffect(() => {
-    const savedCanvasAuth = localStorage.getItem('canvas_auth');
-    const savedGoogleAuth = localStorage.getItem('google_auth');
+    const loadSavedAuth = async () => {
+      const savedCanvasAuth = localStorage.getItem('canvas_auth');
+      const savedGoogleAuth = localStorage.getItem('google_auth');
 
-    if (savedCanvasAuth) {
-      try {
-        setCanvasAuth(JSON.parse(savedCanvasAuth));
-      } catch (e) {
-        console.error('Failed to parse saved Canvas auth', e);
+      if (savedCanvasAuth) {
+        try {
+          const authData = JSON.parse(savedCanvasAuth);
+          // Re-authenticate with backend
+          try {
+            await canvasAPI.authenticate(authData.canvasUrl, authData.accessToken);
+            setCanvasAuth(authData);
+          } catch (e) {
+            console.error('Failed to re-authenticate Canvas', e);
+            // Clear invalid auth
+            localStorage.removeItem('canvas_auth');
+          }
+        } catch (e) {
+          console.error('Failed to parse saved Canvas auth', e);
+          localStorage.removeItem('canvas_auth');
+        }
       }
-    }
 
-    if (savedGoogleAuth) {
-      try {
-        setGoogleAuth(JSON.parse(savedGoogleAuth));
-      } catch (e) {
-        console.error('Failed to parse saved Google auth', e);
+      if (savedGoogleAuth) {
+        try {
+          setGoogleAuth(JSON.parse(savedGoogleAuth));
+        } catch (e) {
+          console.error('Failed to parse saved Google auth', e);
+          localStorage.removeItem('google_auth');
+        }
       }
-    }
+
+      setLoadingAuth(false);
+    };
+
+    loadSavedAuth();
   }, []);
+
+  if (loadingAuth) {
+    return (
+      <div className="app">
+        <div className="loading-screen">
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

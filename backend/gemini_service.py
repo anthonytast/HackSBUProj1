@@ -202,6 +202,204 @@ IMPORTANT:
             print(f"Error parsing Gemini response: {e}")
             return self._create_fallback_plan(assignments)
     
+    async def classify_assignments(self, assignments: List[Assignment]) -> List[dict]:
+        """
+        Classify assignments into categories based on their descriptions and estimate time
+        
+        Args:
+            assignments: List of assignments to classify
+            
+        Returns:
+            List of dictionaries with classification data: {id, category, estimated_time_minutes}
+        """
+        try:
+            # Build classification prompt
+            prompt = self._build_classification_prompt(assignments)
+            
+            # Generate response from Gemini
+            response = self.model.generate_content(prompt)
+            
+            # Parse the response
+            classifications = self._parse_classification_response(response.text, assignments)
+            
+            return classifications
+            
+        except Exception as e:
+            print(f"Error classifying assignments: {e}")
+            # Return fallback classifications
+            return self._create_fallback_classifications(assignments)
+    
+    def _build_classification_prompt(self, assignments: List[Assignment]) -> str:
+        """
+        Build prompt for classifying assignments
+        
+        Args:
+            assignments: List of assignments
+            
+        Returns:
+            Formatted prompt string
+        """
+        assignments_text = ""
+        for idx, assignment in enumerate(assignments, 1):
+            due_date_str = assignment.due_date.strftime("%Y-%m-%d %H:%M") if assignment.due_date else "No due date"
+            description = assignment.description[:500] if assignment.description else "No description"
+            assignments_text += f"""
+Assignment {idx} (ID: {assignment.id}):
+- Title: {assignment.title}
+- Course: {assignment.course_name}
+- Type: {assignment.assignment_type}
+- Due Date: {due_date_str}
+- Points: {assignment.points if assignment.points else 'N/A'}
+- Description: {description}
+"""
+        
+        prompt = f"""Analyze the following assignments and classify each one into a category based on estimated time to complete. Consider the title, description, type, points, and due date.
+
+ASSIGNMENTS:
+{assignments_text}
+
+CATEGORIES (based on estimated time):
+- "quick_task": 15-60 minutes (simple quizzes, short responses, quick readings)
+- "medium_effort": 1-3 hours (homework problems, short essays, medium projects)
+- "long_project": 3-8 hours (research papers, large projects, comprehensive exams)
+- "major_project": 8+ hours (thesis work, major research, complex multi-part projects)
+
+INSTRUCTIONS:
+1. Analyze each assignment's description, title, type, and point value
+2. Estimate realistic time to complete (in minutes)
+3. Classify into the appropriate category
+4. Consider: complexity, length, research needed, writing required, problem-solving difficulty
+
+OUTPUT FORMAT:
+Return ONLY a valid JSON array with this exact structure:
+[
+  {{
+    "assignment_id": 12345,
+    "category": "medium_effort",
+    "estimated_time_minutes": 120,
+    "reasoning": "Brief explanation of classification"
+  }}
+]
+
+IMPORTANT:
+- Return ONLY the JSON array, no additional text or markdown
+- Include ALL assignments in the response
+- Use realistic time estimates based on typical student work
+- Categories should reflect actual time needed, not just assignment type
+"""
+        return prompt
+    
+    def _parse_classification_response(self, response_text: str, assignments: List[Assignment]) -> List[dict]:
+        """
+        Parse classification response from Gemini
+        
+        Args:
+            response_text: Raw response from Gemini
+            assignments: Original assignments for reference
+            
+        Returns:
+            List of classification dictionaries
+        """
+        try:
+            # Clean up the response
+            cleaned_text = response_text.strip()
+            if cleaned_text.startswith('```json'):
+                cleaned_text = cleaned_text[7:]
+            if cleaned_text.startswith('```'):
+                cleaned_text = cleaned_text[3:]
+            if cleaned_text.endswith('```'):
+                cleaned_text = cleaned_text[:-3]
+            cleaned_text = cleaned_text.strip()
+            
+            # Parse JSON
+            classifications = json.loads(cleaned_text)
+            
+            # Validate and format
+            result = []
+            assignment_ids = {a.id for a in assignments}
+            
+            for item in classifications:
+                assignment_id = item.get('assignment_id')
+                if assignment_id in assignment_ids:
+                    result.append({
+                        'assignment_id': assignment_id,
+                        'category': item.get('category', 'medium_effort'),
+                        'estimated_time_minutes': item.get('estimated_time_minutes', 120),
+                        'reasoning': item.get('reasoning', '')
+                    })
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error in classification: {e}")
+            print(f"Response text: {response_text}")
+            return self._create_fallback_classifications(assignments)
+        except Exception as e:
+            print(f"Error parsing classification response: {e}")
+            return self._create_fallback_classifications(assignments)
+    
+    def _create_fallback_classifications(self, assignments: List[Assignment]) -> List[dict]:
+        """
+        Create fallback classifications based on assignment type and points
+        
+        Args:
+            assignments: List of assignments
+            
+        Returns:
+            List of classification dictionaries
+        """
+        classifications = []
+        
+        for assignment in assignments:
+            # Default estimates based on type
+            category = "medium_effort"
+            estimated_time = 120  # 2 hours default
+            
+            assignment_type = (assignment.assignment_type or "").lower()
+            points = assignment.points or 0
+            title = (assignment.title or "").lower()
+            
+            # Classify based on type and points
+            if 'quiz' in title or 'test' in title or 'exam' in title:
+                if points > 100:
+                    category = "long_project"
+                    estimated_time = 240  # 4 hours
+                else:
+                    category = "medium_effort"
+                    estimated_time = 90  # 1.5 hours
+            elif 'paper' in title or 'essay' in title or 'research' in title:
+                if points > 50:
+                    category = "long_project"
+                    estimated_time = 360  # 6 hours
+                else:
+                    category = "medium_effort"
+                    estimated_time = 180  # 3 hours
+            elif 'project' in title:
+                if points > 100:
+                    category = "major_project"
+                    estimated_time = 600  # 10 hours
+                else:
+                    category = "long_project"
+                    estimated_time = 300  # 5 hours
+            elif 'homework' in title or 'problem' in title:
+                category = "medium_effort"
+                estimated_time = 120  # 2 hours
+            elif points < 20:
+                category = "quick_task"
+                estimated_time = 45  # 45 minutes
+            elif points > 100:
+                category = "long_project"
+                estimated_time = 360  # 6 hours
+            
+            classifications.append({
+                'assignment_id': assignment.id,
+                'category': category,
+                'estimated_time_minutes': estimated_time,
+                'reasoning': f'Fallback classification based on type: {assignment_type}, points: {points}'
+            })
+        
+        return classifications
+
     def _create_fallback_plan(self, assignments: List[Assignment]) -> StudyPlan:
         """
         Create a basic fallback study plan if AI generation fails

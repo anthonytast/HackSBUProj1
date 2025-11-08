@@ -21,13 +21,43 @@ export const canvasAPI = {
   },
 
   getAssignments: async () => {
-    const response = await api.get('/canvas/assignments');
-    return response.data;
+    try {
+      const response = await api.get('/canvas/assignments');
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        // Clear authentication if we get 401
+        localStorage.removeItem('canvas_auth');
+        throw new Error('Canvas authentication expired. Please reconnect.');
+      }
+      throw error;
+    }
   },
 
   getCourseAssignments: async (courseId) => {
-    const response = await api.get(`/canvas/assignments/${courseId}`);
-    return response.data;
+    try {
+      const response = await api.get(`/canvas/assignments/${courseId}`);
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        localStorage.removeItem('canvas_auth');
+        throw new Error('Canvas authentication expired. Please reconnect.');
+      }
+      throw error;
+    }
+  },
+
+  getCourses: async () => {
+    try {
+      const response = await api.get('/canvas/courses');
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        localStorage.removeItem('canvas_auth');
+        throw new Error('Canvas authentication expired. Please reconnect.');
+      }
+      throw error;
+    }
   },
 };
 

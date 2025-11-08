@@ -70,13 +70,36 @@ async def authenticate_canvas(auth_request: CanvasAuthRequest):
 @app.get("/canvas/assignments")
 async def get_canvas_assignments():
     """
-    Fetch upcoming assignments from Canvas
+    Fetch upcoming assignments from Canvas and classify them
     """
     try:
         assignments = await canvas_service.fetch_assignments()
+        
+        # Classify assignments using Gemini
+        if assignments:
+            try:
+                classifications = await gemini_service.classify_assignments(assignments)
+                # Create a lookup for classifications
+                classification_lookup = {
+                    c['assignment_id']: c for c in classifications
+                }
+                
+                # Update assignments with classification data
+                for assignment in assignments:
+                    if assignment.id in classification_lookup:
+                        classification = classification_lookup[assignment.id]
+                        assignment.category = classification.get('category')
+                        assignment.estimated_time = classification.get('estimated_time_minutes')
+            except Exception as e:
+                print(f"Warning: Classification failed, using defaults: {e}")
+                # Continue without classification if it fails
+        
         return {"assignments": assignments, "count": len(assignments)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {str(e)}")
+        error_msg = str(e)
+        if "not authenticated" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {error_msg}")
 
 
 @app.get("/canvas/assignments/{course_id}")
@@ -88,7 +111,53 @@ async def get_course_assignments(course_id: int):
         assignments = await canvas_service.fetch_course_assignments(course_id)
         return {"assignments": assignments, "count": len(assignments)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch course assignments: {str(e)}")
+        error_msg = str(e)
+        if "not authenticated" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch course assignments: {error_msg}")
+
+
+@app.get("/canvas/courses")
+async def get_canvas_courses():
+    """
+    Fetch list of active Canvas courses
+    """
+    try:
+        courses = await canvas_service.get_courses()
+        return {"courses": courses, "count": len(courses)}
+    except Exception as e:
+        error_msg = str(e)
+        if "not authenticated" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch courses: {error_msg}")
+
+
+@app.post("/assignments/classify")
+async def classify_assignments(assignments: List[Assignment]):
+    """
+    Classify assignments into categories based on their descriptions
+    """
+    try:
+        classifications = await gemini_service.classify_assignments(assignments)
+        
+        # Update assignments with classification data
+        classification_lookup = {
+            c['assignment_id']: c for c in classifications
+        }
+        
+        for assignment in assignments:
+            if assignment.id in classification_lookup:
+                classification = classification_lookup[assignment.id]
+                assignment.category = classification.get('category')
+                assignment.estimated_time = classification.get('estimated_time_minutes')
+        
+        return {
+            "assignments": assignments,
+            "classifications": classifications,
+            "count": len(assignments)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to classify assignments: {str(e)}")
 
 
 @app.post("/study-plan/generate")
@@ -121,7 +190,14 @@ async def complete_study_plan():
     """
     try:
         # Step 1: Fetch assignments from Canvas
-        assignments = await canvas_service.fetch_assignments()
+        try:
+            assignments = await canvas_service.fetch_assignments()
+        except Exception as e:
+            error_msg = str(e)
+            if "not authenticated" in error_msg.lower():
+                raise HTTPException(status_code=401, detail="Canvas not authenticated. Please authenticate first.")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {error_msg}")
+        
         if not assignments:
             return {"message": "No upcoming assignments found", "events_created": 0}
         
