@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: study_planner_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./credentials.json:/app/credentials.json:ro
+      - ./token.json:/app/token.json
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+# Optional: Add Redis for caching
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: study_planner_redis
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+
+# Optional: Add PostgreSQL for data persistence
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: study_planner_db
+  #   environment:
+  #     POSTGRES_DB: study_planner
+  #     POSTGRES_USER: study_user
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+# volumes:
+#   redis_data:
+#   postgres_data:
