@@ -4,6 +4,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from canvas_service import CanvasService
 from gemini_service import GeminiService
