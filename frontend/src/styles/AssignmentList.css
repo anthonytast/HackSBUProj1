@@ -1,0 +1,118 @@
+.assignment-list {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.assignment-card {
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border-left: 4px solid var(--border);
+  transition: all 0.2s;
+}
+
+.assignment-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+.assignment-card.priority-high {
+  border-left-color: var(--danger);
+}
+
+.assignment-card.priority-medium {
+  border-left-color: var(--warning);
+}
+
+.assignment-card.priority-low {
+  border-left-color: var(--success);
+}
+
+.assignment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.assignment-header h3 {
+  font-size: 1.25rem;
+  color: var(--text);
+  flex: 1;
+}
+
+.course-badge {
+  padding: 0.25rem 0.75rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.assignment-description {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.assignment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.meta-item svg {
+  width: 16px;
+  height: 16px;
+}
+
+.assignment-type {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.assignment-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.assignment-link:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .assignment-header {
+    flex-direction: column;
+  }
+
+  .course-badge {
+    align-self: flex-start;
+  }
+}
