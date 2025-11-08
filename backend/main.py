@@ -146,10 +146,37 @@ async def complete_study_plan():
         raise HTTPException(status_code=500, detail=f"Failed to complete study plan: {str(e)}")
 
 
+@app.get("/google/auth/url")
+async def get_google_auth_url():
+    """
+    Get Google OAuth authorization URL
+    """
+    try:
+        auth_url = await calendar_service.get_authorization_url()
+        return {"auth_url": auth_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate auth URL: {str(e)}")
+
+
+@app.get("/google/auth/callback")
+async def google_auth_callback(code: str, state: Optional[str] = None):
+    """
+    Handle Google OAuth callback
+    """
+    try:
+        credentials = await calendar_service.handle_oauth_callback(code, state)
+        return {
+            "message": "Authentication successful",
+            "credentials": credentials
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
+
+
 @app.post("/google/authenticate")
 async def authenticate_google(auth_request: GoogleAuthRequest):
     """
-    Authenticate with Google Calendar using OAuth 2.0
+    Authenticate with Google Calendar using OAuth 2.0 credentials
     """
     try:
         is_valid = await calendar_service.authenticate(auth_request.credentials)
