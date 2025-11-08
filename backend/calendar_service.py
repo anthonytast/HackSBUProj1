@@ -7,7 +7,11 @@ from datetime import datetime, timedelta
 import os
 import json
 import secrets
+from dotenv import load_dotenv
 from schemas import StudyTask, CalendarEventResponse
+
+# Load environment variables
+load_dotenv()
 
 
 class CalendarService:
@@ -30,10 +34,17 @@ class CalendarService:
         }
         
         # OAuth configuration
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            raise ValueError("Missing required Google OAu" \
+            "th credentials. Please check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env")
+            
         self.client_config = {
             "web": {
-                "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
                 "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/google/auth/callback")]
@@ -48,11 +59,12 @@ class CalendarService:
             str: Authorization URL for user to visit
         """
         try:
-            # Create flow instance
+            # Create flow instance with explicit redirect URI
+            redirect_uri = "http://localhost:8000/google/auth/callback"
             self.oauth_flow = Flow.from_client_config(
                 self.client_config,
                 scopes=self.SCOPES,
-                redirect_uri=self.client_config["web"]["redirect_uris"][0]
+                redirect_uri=redirect_uri
             )
             
             # Generate authorization URL with state for CSRF protection
@@ -81,11 +93,12 @@ class CalendarService:
         """
         try:
             if not self.oauth_flow:
-                # Recreate flow if needed
+                # Recreate flow if needed with explicit redirect URI
+                redirect_uri = "http://localhost:8000/google/auth/callback"
                 self.oauth_flow = Flow.from_client_config(
                     self.client_config,
                     scopes=self.SCOPES,
-                    redirect_uri=self.client_config["web"]["redirect_uris"][0]
+                    redirect_uri=redirect_uri
                 )
             
             # Exchange authorization code for credentials
