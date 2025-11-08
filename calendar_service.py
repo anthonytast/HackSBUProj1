@@ -6,7 +6,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 import os
 import json
-from models.schemas import StudyTask, CalendarEventResponse
+from schemas import StudyTask, CalendarEventResponse
 
 
 class CalendarService:

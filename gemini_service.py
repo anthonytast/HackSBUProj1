@@ -3,7 +3,7 @@ from typing import List
 from datetime import datetime, timedelta
 import json
 import os
-from models.schemas import Assignment, StudyPlan, StudyTask, UserPreferences
+from schemas import Assignment, StudyPlan, StudyTask, UserPreferences
 
 
 class GeminiService:

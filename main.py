@@ -5,10 +5,10 @@ from typing import List, Optional
 import os
 from datetime import datetime
 
-from services.canvas_service import CanvasService
-from services.gemini_service import GeminiService
-from services.calendar_service import CalendarService
-from models.schemas import (
+from canvas_service import CanvasService
+from gemini_service import GeminiService
+from calendar_service import CalendarService
+from schemas import (
     Assignment,
     StudyPlan,
     StudyTask,

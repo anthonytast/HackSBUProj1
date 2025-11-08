@@ -2,7 +2,7 @@ import httpx
 from typing import List, Optional
 from datetime import datetime
 import os
-from models.schemas import Assignment
+from schemas import Assignment
 
 
 class CanvasService:
