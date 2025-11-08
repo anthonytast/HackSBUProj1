@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+from fastapi.responses import RedirectResponse
+import urllib.parse
+import base64
+import json
 
 from canvas_service import CanvasService
 from gemini_service import GeminiService
@@ -168,11 +172,17 @@ async def google_auth_callback(code: str, state: Optional[str] = None):
     Handle Google OAuth callback
     """
     try:
+        # Exchange code for credentials
         credentials = await calendar_service.handle_oauth_callback(code, state)
-        return {
-            "message": "Authentication successful",
-            "credentials": credentials
-        }
+
+        # Serialize credentials to a URL-safe base64 string and redirect to frontend
+        # Use FRONTEND_URL env var if provided, otherwise default to Vite dev URL
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        creds_json = json.dumps(credentials)
+        token = base64.urlsafe_b64encode(creds_json.encode()).decode()
+        # Put token in fragment to avoid it being sent to backend in future requests
+        redirect_url = f"{frontend_url}/#google_auth={urllib.parse.quote(token)}"
+        return RedirectResponse(url=redirect_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
 

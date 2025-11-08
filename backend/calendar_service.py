@@ -38,8 +38,7 @@ class CalendarService:
         client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
         
         if not client_id or not client_secret:
-            raise ValueError("Missing required Google OAu" \
-            "th credentials. Please check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env")
+            raise ValueError("Missing required Google OAuth credentials. Please check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env")
             
         self.client_config = {
             "web": {
