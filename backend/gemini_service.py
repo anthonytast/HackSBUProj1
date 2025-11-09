@@ -48,7 +48,7 @@ class GeminiService:
                     {"role": "user", "content": [{"type": "text", "text": prompt}]}
                 ],
                 "temperature": 0.7,
-                "max_tokens": 2048,
+                "max_tokens": 8000,
                 "stream": False,
                 "model": self.model  # Ensure model is in the payload
             }
@@ -347,7 +347,7 @@ IMPORTANT:
                     {"role": "user", "content": [{"type": "text", "text": cont_prompt}]}
                 ],
                 "temperature": 0.0,
-                "max_tokens": 1024,
+                "max_tokens": 4000,
                 "stream": False,
             }
 
