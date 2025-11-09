@@ -10,6 +10,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
   const [studyPlan, setStudyPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('assignments');
   const [stats, setStats] = useState({
     totalAssignments: 0,
@@ -24,7 +25,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
   }, [canvasAuth]);
 
   const fetchAssignments = async () => {
-    setLoading(true);
+    setAssignmentsLoading(true);
     setError(null);
     try {
       const data = await canvasAPI.getAssignments();
@@ -33,7 +34,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
     } catch (err) {
       setError('Failed to fetch assignments: ' + err.message);
     } finally {
-      setLoading(false);
+      setAssignmentsLoading(false);
     }
   };
 
@@ -64,10 +65,27 @@ function Dashboard({ canvasAuth, googleAuth }) {
     setError(null);
     try {
       const data = await studyPlanAPI.generatePlan(assignments);
+      if (!data.study_plan || !data.study_plan.tasks) {
+        throw new Error('Received invalid study plan from server');
+      }
       setStudyPlan(data.study_plan);
       setActiveTab('studyplan');
     } catch (err) {
       setError('Failed to generate study plan: ' + err.message);
+      // Keep loading state if we need to retry
+      if (err.message.includes('invalid model')) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          const retryData = await studyPlanAPI.generatePlan(assignments);
+          if (retryData.study_plan && retryData.study_plan.tasks) {
+            setStudyPlan(retryData.study_plan);
+            setActiveTab('studyplan');
+            setError(null);
+          }
+        } catch (retryErr) {
+          setError('Failed to generate study plan after retry: ' + retryErr.message);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -141,7 +159,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
       <div className="action-bar">
         <button
           onClick={fetchAssignments}
-          disabled={loading || !canvasAuth}
+          disabled={(loading || assignmentsLoading) || !canvasAuth}
           className="btn btn-secondary"
         >
           <RefreshCw size={18} />
@@ -150,7 +168,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
 
         <button
           onClick={handleGenerateStudyPlan}
-          disabled={loading || !canvasAuth || assignments.length === 0}
+          disabled={(loading || assignmentsLoading) || !canvasAuth || assignments.length === 0}
           className="btn btn-primary"
         >
           Generate Study Plan
@@ -158,7 +176,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
 
         <button
           onClick={handleCompletePlan}
-          disabled={loading || !canvasAuth || !googleAuth}
+          disabled={(loading || assignmentsLoading) || !canvasAuth || !googleAuth}
           className="btn btn-success"
         >
           Complete Plan (Add to Calendar)
@@ -191,7 +209,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
 
       {/* Content */}
       <div className="tab-content">
-        {loading ? (
+        {(loading || assignmentsLoading) ? (
           <div className="loading">
             <RefreshCw className="spin" size={32} />
             <p>Loading...</p>
