@@ -1,10 +1,22 @@
+# Standard library imports
+import base64
+import json
+import os
+import urllib.parse
+from datetime import datetime, timedelta
+from typing import List, Optional
+
+# Third-party imports
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from typing import List, Optional
-import os
-from datetime import datetime
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Local imports
 from canvas_service import CanvasService
 from gemini_service import GeminiService
 from calendar_service import CalendarService
@@ -17,6 +29,7 @@ from schemas import (
     CanvasAuthRequest,
     GoogleAuthRequest
 )
+from models_service import ModelsService
 
 app = FastAPI(
     title="Study Planner API",
@@ -37,6 +50,7 @@ app.add_middleware(
 canvas_service = CanvasService()
 gemini_service = GeminiService()
 calendar_service = CalendarService()
+models_service = ModelsService()
 
 
 @app.get("/")
@@ -47,6 +61,35 @@ async def root():
         "status": "active",
         "version": "1.0.0"
     }
+
+@app.get("/models/available")
+async def get_available_models():
+    """
+    Get list of available AI models from OpenRouter
+    """
+    try:
+        models = await models_service.get_available_models()
+        # Extract just the useful info
+        model_info = [{
+            "id": m.get("id"),
+            "name": m.get("name"),
+            "provider": m.get("provider") or None,
+            "endpoints": m.get("endpoints", []),
+            "pricing": m.get("pricing", {})
+        } for m in models]
+        return {"models": model_info}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch models: {str(e)}")
+
+
+@app.get("/google/status")
+async def google_status():
+    """Simple endpoint to check whether backend has Google Calendar authenticated"""
+    try:
+        is_authed = calendar_service.service is not None
+        return {"authenticated": bool(is_authed)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/canvas/authenticate")
@@ -70,13 +113,36 @@ async def authenticate_canvas(auth_request: CanvasAuthRequest):
 @app.get("/canvas/assignments")
 async def get_canvas_assignments():
     """
-    Fetch upcoming assignments from Canvas
+    Fetch upcoming assignments from Canvas and classify them
     """
     try:
         assignments = await canvas_service.fetch_assignments()
+        
+        # Classify assignments using Gemini
+        if assignments:
+            try:
+                classifications = await gemini_service.classify_assignments(assignments)
+                # Create a lookup for classifications
+                classification_lookup = {
+                    c['assignment_id']: c for c in classifications
+                }
+                
+                # Update assignments with classification data
+                for assignment in assignments:
+                    if assignment.id in classification_lookup:
+                        classification = classification_lookup[assignment.id]
+                        assignment.category = classification.get('category')
+                        assignment.estimated_time = classification.get('estimated_time_minutes')
+            except Exception as e:
+                print(f"Warning: Classification failed, using defaults: {e}")
+                # Continue without classification if it fails
+        
         return {"assignments": assignments, "count": len(assignments)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {str(e)}")
+        error_msg = str(e)
+        if "not authenticated" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {error_msg}")
 
 
 @app.get("/canvas/assignments/{course_id}")
@@ -88,7 +154,53 @@ async def get_course_assignments(course_id: int):
         assignments = await canvas_service.fetch_course_assignments(course_id)
         return {"assignments": assignments, "count": len(assignments)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch course assignments: {str(e)}")
+        error_msg = str(e)
+        if "not authenticated" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch course assignments: {error_msg}")
+
+
+@app.get("/canvas/courses")
+async def get_canvas_courses():
+    """
+    Fetch list of active Canvas courses
+    """
+    try:
+        courses = await canvas_service.get_courses()
+        return {"courses": courses, "count": len(courses)}
+    except Exception as e:
+        error_msg = str(e)
+        if "not authenticated" in error_msg.lower():
+            raise HTTPException(status_code=401, detail=error_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch courses: {error_msg}")
+
+
+@app.post("/assignments/classify")
+async def classify_assignments(assignments: List[Assignment]):
+    """
+    Classify assignments into categories based on their descriptions
+    """
+    try:
+        classifications = await gemini_service.classify_assignments(assignments)
+        
+        # Update assignments with classification data
+        classification_lookup = {
+            c['assignment_id']: c for c in classifications
+        }
+        
+        for assignment in assignments:
+            if assignment.id in classification_lookup:
+                classification = classification_lookup[assignment.id]
+                assignment.category = classification.get('category')
+                assignment.estimated_time = classification.get('estimated_time_minutes')
+        
+        return {
+            "assignments": assignments,
+            "classifications": classifications,
+            "count": len(assignments)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to classify assignments: {str(e)}")
 
 
 @app.post("/study-plan/generate")
@@ -104,9 +216,31 @@ async def generate_study_plan(
         if preferences is None:
             preferences = UserPreferences()
         
+        # If calendar is authenticated, fetch free slots to pass to the generator
+        free_slots = None
+        try:
+            if calendar_service.service:
+                # Determine range: from now until latest assignment due date (or +7 days)
+                now = datetime.now()
+                latest_due = None
+                for a in assignments:
+                    if a.due_date:
+                        if latest_due is None or a.due_date > latest_due:
+                            latest_due = a.due_date
+                if latest_due is None:
+                    end_dt = (now + timedelta(days=7)).isoformat()
+                else:
+                    end_dt = latest_due.isoformat()
+                start_dt = now.isoformat()
+                free_slots = await calendar_service.get_free_slots(start_dt, end_dt)
+        except Exception as e:
+            # If calendar lookup fails, proceed without availability
+            print(f"Warning: failed to fetch calendar free slots: {e}")
+
         study_plan = await gemini_service.generate_study_plan(
             assignments=assignments,
-            preferences=preferences
+            preferences=preferences,
+            free_slots=free_slots
         )
         
         return {"study_plan": study_plan, "task_count": len(study_plan.tasks)}
@@ -120,36 +254,118 @@ async def complete_study_plan():
     Full pipeline: Fetch assignments → Generate plan → Create calendar events
     """
     try:
+        print("Starting /study-plan/complete pipeline")
         # Step 1: Fetch assignments from Canvas
-        assignments = await canvas_service.fetch_assignments()
+        try:
+            assignments = await canvas_service.fetch_assignments()
+        except Exception as e:
+            error_msg = str(e)
+            if "not authenticated" in error_msg.lower():
+                raise HTTPException(status_code=401, detail="Canvas not authenticated. Please authenticate first.")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch assignments: {error_msg}")
+        
         if not assignments:
             return {"message": "No upcoming assignments found", "events_created": 0}
         
         # Step 2: Generate study plan with Gemini
         preferences = UserPreferences()  # Use defaults or get from request
-        study_plan = await gemini_service.generate_study_plan(
-            assignments=assignments,
-            preferences=preferences
-        )
+        try:
+            # If calendar is authenticated, fetch free slots to pass to the generator
+            free_slots = None
+            try:
+                if calendar_service.service:
+                    now = datetime.now()
+                    latest_due = None
+                    for a in assignments:
+                        if a.due_date:
+                            if latest_due is None or a.due_date > latest_due:
+                                latest_due = a.due_date
+                    if latest_due is None:
+                        end_dt = (now + timedelta(days=7)).isoformat()
+                    else:
+                        end_dt = latest_due.isoformat()
+                    start_dt = now.isoformat()
+                    free_slots = await calendar_service.get_free_slots(start_dt, end_dt)
+            except Exception as e:
+                print(f"Warning: failed to fetch calendar free slots: {e}")
+
+            study_plan = await gemini_service.generate_study_plan(
+                assignments=assignments,
+                preferences=preferences,
+                free_slots=free_slots
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to generate study plan: {str(e)}")
         
         # Step 3: Create calendar events
-        events = await calendar_service.create_study_events(study_plan.tasks)
-        
-        return {
-            "message": "Study plan created successfully",
-            "assignments_processed": len(assignments),
-            "tasks_generated": len(study_plan.tasks),
-            "events_created": len(events),
-            "calendar_events": events
-        }
+        try:
+            print("Creating calendar events...")
+            if not calendar_service.service:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Google Calendar not authenticated. Please authenticate first."
+                )
+            
+            events = await calendar_service.create_study_events(study_plan.tasks)
+            print(f"Created {len(events)} events in calendar")
+            return {
+                "message": "Study plan created successfully",
+                "assignments_processed": len(assignments),
+                "tasks_generated": len(study_plan.tasks),
+                "events_created": len(events),
+                "calendar_events": events
+            }
+        except Exception as e:
+            error_msg = str(e)
+            if "Not authenticated" in error_msg:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Google Calendar not authenticated. Please authenticate first."
+                )
+            raise HTTPException(status_code=500, detail=f"Failed to create calendar events: {error_msg}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to complete study plan: {str(e)}")
+
+
+@app.get("/google/auth/url")
+async def get_google_auth_url():
+    """
+    Get Google OAuth authorization URL
+    """
+    try:
+        auth_url = await calendar_service.get_authorization_url()
+        return {"auth_url": auth_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate auth URL: {str(e)}")
+
+
+@app.get("/google/auth/callback")
+async def google_auth_callback(code: str, state: Optional[str] = None):
+    """
+    Handle Google OAuth callback
+    """
+    try:
+        # Exchange code for credentials
+        credentials = await calendar_service.handle_oauth_callback(code, state)
+
+        # Serialize credentials to a URL-safe base64 string and redirect to frontend
+        # Use FRONTEND_URL env var if provided, otherwise default to Vite dev URL
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        creds_json = json.dumps(credentials)
+        token = base64.urlsafe_b64encode(creds_json.encode()).decode()
+        # Put token in fragment to avoid it being sent to backend in future requests
+        redirect_url = f"{frontend_url}/#google_auth={urllib.parse.quote(token)}"
+        return RedirectResponse(url=redirect_url)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {str(e)}")
 
 
 @app.post("/google/authenticate")
 async def authenticate_google(auth_request: GoogleAuthRequest):
     """
-    Authenticate with Google Calendar using OAuth 2.0
+    Authenticate with Google Calendar using OAuth 2.0 credentials
     """
     try:
         is_valid = await calendar_service.authenticate(auth_request.credentials)

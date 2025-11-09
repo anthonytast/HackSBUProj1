@@ -1,12 +1,18 @@
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow, InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 import os
 import json
+import secrets
+from dotenv import load_dotenv
+import pytz
 from schemas import StudyTask, CalendarEventResponse
+
+# Load environment variables
+load_dotenv()
 
 
 class CalendarService:
@@ -19,6 +25,7 @@ class CalendarService:
         self.creds = None
         self.service = None
         self.calendar_id = 'primary'  # Use primary calendar by default
+        self.oauth_flow = None
         
         # Color IDs for different priorities
         self.color_map = {
@@ -26,6 +33,99 @@ class CalendarService:
             'medium': '5',     # Yellow
             'low': '10'        # Green
         }
+        
+        # OAuth configuration
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            raise ValueError("Missing required Google OAuth credentials. Please check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env")
+            
+        self.client_config = {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/google/auth/callback")]
+            }
+        }
+    
+    async def get_authorization_url(self) -> str:
+        """
+        Generate Google OAuth authorization URL
+        
+        Returns:
+            str: Authorization URL for user to visit
+        """
+        try:
+            # Create flow instance with explicit redirect URI
+            redirect_uri = "http://localhost:8000/google/auth/callback"
+            self.oauth_flow = Flow.from_client_config(
+                self.client_config,
+                scopes=self.SCOPES,
+                redirect_uri=redirect_uri
+            )
+            
+            # Generate authorization URL with state for CSRF protection
+            authorization_url, state = self.oauth_flow.authorization_url(
+                access_type='offline',
+                include_granted_scopes='true',
+                prompt='consent'  # Force consent screen to get refresh token
+            )
+            
+            return authorization_url
+            
+        except Exception as e:
+            print(f"Error generating authorization URL: {e}")
+            raise
+    
+    async def handle_oauth_callback(self, code: str, state: Optional[str] = None) -> dict:
+        """
+        Handle OAuth callback and exchange code for credentials
+        
+        Args:
+            code: Authorization code from Google
+            state: State parameter for CSRF protection
+            
+        Returns:
+            dict: Credentials dictionary
+        """
+        try:
+            if not self.oauth_flow:
+                # Recreate flow if needed with explicit redirect URI
+                redirect_uri = "http://localhost:8000/google/auth/callback"
+                self.oauth_flow = Flow.from_client_config(
+                    self.client_config,
+                    scopes=self.SCOPES,
+                    redirect_uri=redirect_uri
+                )
+            
+            # Exchange authorization code for credentials
+            self.oauth_flow.fetch_token(code=code)
+            
+            # Get credentials
+            credentials = self.oauth_flow.credentials
+            
+            # Convert to dictionary for storage
+            creds_dict = {
+                'token': credentials.token,
+                'refresh_token': credentials.refresh_token,
+                'token_uri': credentials.token_uri,
+                'client_id': credentials.client_id,
+                'client_secret': credentials.client_secret,
+                'scopes': credentials.scopes
+            }
+            
+            # Store credentials
+            self.creds = credentials
+            self.service = build('calendar', 'v3', credentials=self.creds)
+            
+            return creds_dict
+            
+        except Exception as e:
+            print(f"OAuth callback error: {e}")
+            raise
     
     async def authenticate(self, credentials: dict) -> bool:
         """
@@ -200,40 +300,61 @@ Created by Study Planner
         """
         if not self.service:
             raise Exception("Not authenticated with Google Calendar")
-        
+
         try:
-            # Parse dates
-            time_min = datetime.fromisoformat(start_date).isoformat() + 'Z'
-            time_max = datetime.fromisoformat(end_date).isoformat() + 'Z'
-            
-            # Fetch busy times
+            # Determine timezone to interpret naive datetimes
+            tz_name = os.getenv('TIMEZONE', 'America/New_York')
+            tz = pytz.timezone(tz_name)
+
+            def _parse_iso_to_tz(dt_str: str) -> datetime:
+                # Ensure we have a datetime portion
+                if 'T' not in dt_str:
+                    dt_str = dt_str + 'T00:00:00'
+                # Parse; fromisoformat supports offsets if present
+                parsed = datetime.fromisoformat(dt_str)
+                if parsed.tzinfo is None:
+                    # Localize naive datetimes to configured timezone
+                    parsed = tz.localize(parsed)
+                return parsed
+
+            time_min_dt = _parse_iso_to_tz(start_date)
+            time_max_dt = _parse_iso_to_tz(end_date)
+
+            # Use RFC3339 strings with offset (isoformat includes offset for tz-aware)
+            time_min = time_min_dt.isoformat()
+            time_max = time_max_dt.isoformat()
+
+            # Fetch busy times; include timezone in the request
             body = {
                 "timeMin": time_min,
                 "timeMax": time_max,
+                "timeZone": tz_name,
                 "items": [{"id": self.calendar_id}]
             }
-            
+
             events_result = self.service.freebusy().query(body=body).execute()
-            busy_times = events_result['calendars'][self.calendar_id]['busy']
-            
+            busy_times = events_result['calendars'][self.calendar_id].get('busy', [])
+
             # Calculate free slots
             free_slots = []
-            current_time = datetime.fromisoformat(start_date)
-            end_time = datetime.fromisoformat(end_date)
-            
+            current_time = time_min_dt
+            end_time = time_max_dt
+
             for busy in busy_times:
-                busy_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00'))
-                busy_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00'))
-                
+                # Parse busy intervals (they may be in UTC 'Z' or include offsets)
+                busy_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00')).astimezone(tz)
+                busy_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00')).astimezone(tz)
+
                 if current_time < busy_start:
                     free_slots.append({
                         'start': current_time.isoformat(),
                         'end': busy_start.isoformat(),
                         'duration_minutes': int((busy_start - current_time).total_seconds() / 60)
                     })
-                
+
+                # Move current_time forward
                 current_time = max(current_time, busy_end)
-            
+
             # Add final free slot if exists
             if current_time < end_time:
                 free_slots.append({
@@ -241,9 +362,9 @@ Created by Study Planner
                     'end': end_time.isoformat(),
                     'duration_minutes': int((end_time - current_time).total_seconds() / 60)
                 })
-            
+
             return free_slots
-            
+
         except Exception as e:
             print(f"Error fetching free slots: {e}")
             raise Exception(f"Failed to get free slots: {str(e)}")

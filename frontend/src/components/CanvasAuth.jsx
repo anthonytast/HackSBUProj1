@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { LogIn, KeyRound, ExternalLink } from 'lucide-react';
 import { canvasAPI } from '../services/api';
 import '../styles/AuthModal.css';
@@ -51,6 +52,101 @@ function CanvasAuth({ onAuthSuccess, isAuthenticated }) {
     );
   }
 
+  const modalContent = showModal && (
+    <div className="modal-overlay" onClick={() => setShowModal(false)}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Connect to Canvas</h2>
+          <button onClick={() => setShowModal(false)} className="modal-close">
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleAuthenticate} className="auth-form">
+          <div className="form-group">
+            <label htmlFor="canvasUrl">
+              Canvas Institution URL
+              <span className="label-hint">
+                (e.g., https://yourschool.instructure.com)
+              </span>
+            </label>
+            <input
+              id="canvasUrl"
+              type="url"
+              value={canvasUrl}
+              onChange={(e) => setCanvasUrl(e.target.value)}
+              placeholder="https://institution.instructure.com"
+              required
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="accessToken">
+              Access Token
+              <a
+                href="https://community.canvaslms.com/t5/Student-Guide/How-do-I-manage-API-access-tokens-as-a-student/ta-p/273"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="help-link"
+              >
+                <ExternalLink size={14} />
+                How to get your token
+              </a>
+            </label>
+            <input
+              id="accessToken"
+              type="password"
+              value={accessToken}
+              onChange={(e) => setAccessToken(e.target.value)}
+              placeholder="Enter your Canvas API token"
+              required
+              className="form-input"
+            />
+          </div>
+
+          {error && (
+            <div className="alert alert-error">
+              {error}
+            </div>
+          )}
+
+          {loading && (
+            <p className="auth-hint">
+              Connecting to Canvas... This may take a minute
+            </p>
+          )}
+
+          <div className="form-actions">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="btn btn-secondary"
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading ? 'Connecting...' : 'Connect'}
+            </button>
+          </div>
+        </form>
+
+        <div className="auth-help">
+          <KeyRound size={16} />
+          <p>
+            Your credentials are stored locally and used only to connect to Canvas.
+            Never share your access token with anyone.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="auth-container">
       <button onClick={() => setShowModal(true)} className="btn btn-primary">
@@ -58,94 +154,7 @@ function CanvasAuth({ onAuthSuccess, isAuthenticated }) {
         Connect Canvas
       </button>
 
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Connect to Canvas</h2>
-              <button onClick={() => setShowModal(false)} className="modal-close">
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleAuthenticate} className="auth-form">
-              <div className="form-group">
-                <label htmlFor="canvasUrl">
-                  Canvas Institution URL
-                  <span className="label-hint">
-                    (e.g., https://yourschool.instructure.com)
-                  </span>
-                </label>
-                <input
-                  id="canvasUrl"
-                  type="url"
-                  value={canvasUrl}
-                  onChange={(e) => setCanvasUrl(e.target.value)}
-                  placeholder="https://institution.instructure.com"
-                  required
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="accessToken">
-                  Access Token
-                  <a
-                    href="https://community.canvaslms.com/t5/Student-Guide/How-do-I-manage-API-access-tokens-as-a-student/ta-p/273"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="help-link"
-                  >
-                    <ExternalLink size={14} />
-                    How to get your token
-                  </a>
-                </label>
-                <input
-                  id="accessToken"
-                  type="password"
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="Enter your Canvas API token"
-                  required
-                  className="form-input"
-                />
-              </div>
-
-              {error && (
-                <div className="alert alert-error">
-                  {error}
-                </div>
-              )}
-
-              <div className="form-actions">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="btn btn-secondary"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loading}
-                >
-                  {loading ? 'Connecting...' : 'Connect'}
-                </button>
-              </div>
-            </form>
-
-            <div className="auth-help">
-              <KeyRound size={16} />
-              <p>
-                Your credentials are stored locally and used only to connect to Canvas.
-                Never share your access token with anyone.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {showModal && createPortal(modalContent, document.body)}
     </div>
   );
 }

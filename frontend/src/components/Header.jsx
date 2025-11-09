@@ -9,7 +9,7 @@ function Header({ canvasAuth, googleAuth, onCanvasAuth, onGoogleAuth }) {
       <div className="header-content">
         <div className="brand">
           <GraduationCap size={32} />
-          <h1>Study Planner AI</h1>
+          <h1>StudyFlow AI</h1>
         </div>
 
         <div className="auth-section">

@@ -5,15 +5,17 @@
 .auth-status {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.5rem 1rem;
-  background: var(--bg-tertiary);
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
 }
 
 .auth-status.authenticated {
-  border-color: var(--success);
+  border-color: rgba(5, 150, 105, 0.3);
+  background: rgba(5, 150, 105, 0.08);
 }
 
 .auth-info {
@@ -23,14 +25,14 @@
 }
 
 .status-indicator {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
 }
 
 .status-indicator.success {
   background: var(--success);
-  box-shadow: 0 0 8px var(--success);
+  box-shadow: 0 0 6px rgba(5, 150, 105, 0.5);
   animation: pulse 2s infinite;
 }
 
@@ -39,7 +41,7 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.6;
   }
 }
 
@@ -50,51 +52,81 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  padding: 1rem;
+  overflow-y: auto;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal-content {
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  width: 90%;
-  max-width: 500px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px var(--shadow);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+  margin: auto;
+  position: relative;
+  z-index: 10000;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border);
 }
 
 .modal-header h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   color: var(--text);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .modal-close {
   background: transparent;
   border: none;
-  font-size: 2rem;
+  font-size: 1.75rem;
   color: var(--text-muted);
   cursor: pointer;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  line-height: 1;
 }
 
 .modal-close:hover {
@@ -142,19 +174,20 @@
 
 .form-input {
   width: 100%;
-  padding: 0.75rem;
-  background: var(--bg-tertiary);
+  padding: 0.625rem 0.875rem;
+  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text);
-  font-size: 1rem;
-  transition: all 0.2s;
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  background: var(--bg-tertiary);
 }
 
 .form-input::placeholder {
@@ -193,17 +226,44 @@
   line-height: 1.5;
 }
 
+.auth-hint {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
   .modal-content {
-    width: 95%;
-    max-height: 95vh;
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100vh - 2.5rem);
+    margin-top: 0;
+  }
+
+  .modal-header {
+    padding: 1rem 1.25rem;
+  }
+
+  .modal-header h2 {
+    font-size: 1.125rem;
   }
 
   .auth-form {
-    padding: 1rem;
+    padding: 1rem 1.25rem;
   }
 
   .form-actions {
     flex-direction: column;
+  }
+
+  .auth-help {
+    padding: 0.875rem 1.25rem;
   }
 }

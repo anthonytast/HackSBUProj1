@@ -25,6 +25,7 @@ class Assignment(BaseModel):
     assignment_type: Optional[str] = "assignment"
     points: Optional[float] = None
     estimated_time: Optional[int] = None  # in minutes
+    category: Optional[str] = None  # quick_task, medium_effort, long_project, major_project
     submission_types: Optional[List[str]] = []
     html_url: Optional[str] = None
 

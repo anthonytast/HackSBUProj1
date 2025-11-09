@@ -5,20 +5,24 @@
 }
 
 :root {
-  --primary: #6366f1;
-  --primary-dark: #4f46e5;
-  --secondary: #8b5cf6;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --bg: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --text: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --border: #475569;
-  --shadow: rgba(0, 0, 0, 0.3);
+  --primary: #4f46e5;
+  --primary-dark: #4338ca;
+  --primary-light: #6366f1;
+  --secondary: #7c3aed;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --bg: #030712;
+  --bg-secondary: #0a0f1e;
+  --bg-tertiary: #111827;
+  --bg-card: #131926;
+  --text: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --border: #1f2937;
+  --border-light: #374151;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --shadow-sm: rgba(0, 0, 0, 0.2);
 }
 
 body {
@@ -57,45 +61,48 @@ body {
 .welcome-screen h2 {
   font-size: 2.5rem;
   margin-bottom: 1rem;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .welcome-screen > p {
-  font-size: 1.2rem;
+  font-size: 1.125rem;
   color: var(--text-secondary);
   margin-bottom: 3rem;
+  font-weight: 400;
 }
 
 .features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 2rem;
+  gap: 1.25rem;
   margin-top: 3rem;
 }
 
 .feature {
-  background: var(--bg-secondary);
-  padding: 2rem;
-  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 1.75rem;
+  border-radius: 8px;
   border: 1px solid var(--border);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
 }
 
 .feature:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px var(--shadow);
+  border-color: var(--border-light);
+  background: var(--bg-tertiary);
 }
 
 .feature h3 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin-bottom: 0.5rem;
+  font-weight: 500;
 }
 
 .feature p {
   color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
 }
 
 /* Buttons */
@@ -103,18 +110,19 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.625rem 1.25rem;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
   text-decoration: none;
+  letter-spacing: 0.01em;
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -125,17 +133,19 @@ body {
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary-dark);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
 .btn-secondary {
   background: var(--bg-tertiary);
-  color: var(--text);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  border-color: var(--border-light);
 }
 
 .btn-success {
@@ -144,22 +154,25 @@ body {
 }
 
 .btn-success:hover:not(:disabled) {
-  background: #059669;
+  background: #047857;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
 }
 
 .btn-outline {
   background: transparent;
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: var(--bg-tertiary);
+  background: var(--bg-card);
+  border-color: var(--border-light);
+  color: var(--text);
 }
 
 .btn-sm {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
 }
 
 /* Alerts */
@@ -224,14 +237,36 @@ body {
   color: var(--text);
 }
 
+/* Loading Screen */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 0.5rem;
+}
+
+.loading-screen > p:first-child {
+  font-size: 1.25rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.loading-hint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Footer */
 .app-footer {
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
-  padding: 1.5rem;
+  padding: 1.25rem;
   text-align: center;
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 /* Responsive */

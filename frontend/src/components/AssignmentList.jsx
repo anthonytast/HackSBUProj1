@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { BookOpen, Calendar, Clock, Award } from 'lucide-react';
+import { BookOpen, Calendar, Clock, Award, Tag } from 'lucide-react';
 import '../styles/AssignmentList.css';
 
 function AssignmentList({ assignments }) {
@@ -13,6 +13,43 @@ function AssignmentList({ assignments }) {
     );
   }
 
+  // Sort assignments by category and estimated time
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    // Category priority order (quick tasks first, then by time)
+    const categoryOrder = {
+      'quick_task': 1,
+      'medium_effort': 2,
+      'long_project': 3,
+      'major_project': 4
+    };
+    
+    const aCategory = a.category || 'medium_effort';
+    const bCategory = b.category || 'medium_effort';
+    
+    const aOrder = categoryOrder[aCategory] || 2;
+    const bOrder = categoryOrder[bCategory] || 2;
+    
+    // First sort by category
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    
+    // Then by estimated time (shorter first within same category)
+    const aTime = a.estimated_time || 120;
+    const bTime = b.estimated_time || 120;
+    if (aTime !== bTime) {
+      return aTime - bTime;
+    }
+    
+    // Finally by due date (earlier first)
+    if (a.due_date && b.due_date) {
+      return new Date(a.due_date) - new Date(b.due_date);
+    }
+    if (a.due_date) return -1;
+    if (b.due_date) return 1;
+    return 0;
+  });
+
   const getPriorityClass = (dueDate) => {
     if (!dueDate) return 'priority-low';
     
@@ -25,6 +62,26 @@ function AssignmentList({ assignments }) {
     return 'priority-low';
   };
 
+  const getCategoryLabel = (category) => {
+    const labels = {
+      'quick_task': 'Quick Task',
+      'medium_effort': 'Medium Effort',
+      'long_project': 'Long Project',
+      'major_project': 'Major Project'
+    };
+    return labels[category] || 'Assignment';
+  };
+
+  const getCategoryClass = (category) => {
+    const classes = {
+      'quick_task': 'category-quick',
+      'medium_effort': 'category-medium',
+      'long_project': 'category-long',
+      'major_project': 'category-major'
+    };
+    return classes[category] || 'category-medium';
+  };
+
   const formatDueDate = (dueDate) => {
     if (!dueDate) return 'No due date';
     try {
@@ -34,16 +91,33 @@ function AssignmentList({ assignments }) {
     }
   };
 
+  const formatTime = (minutes) => {
+    if (!minutes) return 'N/A';
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) return `${hours} hr`;
+    return `${hours} hr ${mins} min`;
+  };
+
   return (
     <div className="assignment-list">
-      {assignments.map((assignment) => (
+      {sortedAssignments.map((assignment) => (
         <div
           key={assignment.id}
           className={`assignment-card ${getPriorityClass(assignment.due_date)}`}
         >
           <div className="assignment-header">
             <h3>{assignment.title}</h3>
-            <span className="course-badge">{assignment.course_name}</span>
+            <div className="header-badges">
+              {assignment.category && (
+                <span className={`category-badge ${getCategoryClass(assignment.category)}`}>
+                  <Tag size={12} />
+                  {getCategoryLabel(assignment.category)}
+                </span>
+              )}
+              <span className="course-badge">{assignment.course_name}</span>
+            </div>
           </div>
 
           <div className="assignment-details">
@@ -61,17 +135,17 @@ function AssignmentList({ assignments }) {
                 <span>{formatDueDate(assignment.due_date)}</span>
               </div>
 
+              {assignment.estimated_time && (
+                <div className="meta-item">
+                  <Clock size={16} />
+                  <span>{formatTime(assignment.estimated_time)}</span>
+                </div>
+              )}
+
               {assignment.points && (
                 <div className="meta-item">
                   <Award size={16} />
                   <span>{assignment.points} points</span>
-                </div>
-              )}
-
-              {assignment.estimated_time && (
-                <div className="meta-item">
-                  <Clock size={16} />
-                  <span>{assignment.estimated_time} min</span>
                 </div>
               )}
             </div>
