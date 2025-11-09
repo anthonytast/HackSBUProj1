@@ -213,6 +213,7 @@ function Dashboard({ canvasAuth, googleAuth }) {
           <div className="loading">
             <RefreshCw className="spin" size={32} />
             <p>Loading...</p>
+            <p className="loading-hint">This may take a minute</p>
           </div>
         ) : (
           <>

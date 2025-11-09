@@ -53,6 +53,7 @@ function App() {
       <div className="app">
         <div className="loading-screen">
           <p>Loading...</p>
+          <p className="loading-hint">This may take a minute</p>
         </div>
       </div>
     );
@@ -70,19 +71,21 @@ function App() {
       <main className="app-main">
         {!canvasAuth ? (
           <div className="welcome-screen">
-            <h2>Welcome to Study Planner AI</h2>
-            <p>Connect your Canvas account to get started with AI-powered study planning</p>
+            <h2>Welcome to StudyFlow AI</h2>
+            <h3>Canvas to calendar, carefully coordinated.</h3>
+            <p>Connect your Canvas account to get started with AI-powered study planning!</p>
             <div className="features">
               <div className="feature">
-                <h3>📚 Fetch Assignments</h3>
+                <h3>Fetch Assignments</h3>
                 <p>Automatically pull your upcoming assignments from Canvas</p>
               </div>
               <div className="feature">
-                <h3>🤖 AI Study Plans</h3>
+                <h3>AI Study Plans</h3>
                 <p>Generate personalized study schedules with Google Gemini</p>
               </div>
               <div className="feature">
-                <h3>📅 Calendar Integration</h3>
+                <h3>
+                  Calendar Integration</h3>
                 <p>Automatically schedule study sessions in Google Calendar</p>
               </div>
             </div>
