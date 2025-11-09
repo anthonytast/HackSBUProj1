@@ -8,6 +8,7 @@ import os
 import json
 import secrets
 from dotenv import load_dotenv
+import pytz
 from schemas import StudyTask, CalendarEventResponse
 
 # Load environment variables
@@ -299,40 +300,61 @@ Created by Study Planner
         """
         if not self.service:
             raise Exception("Not authenticated with Google Calendar")
-        
+
         try:
-            # Parse dates
-            time_min = datetime.fromisoformat(start_date).isoformat() + 'Z'
-            time_max = datetime.fromisoformat(end_date).isoformat() + 'Z'
-            
-            # Fetch busy times
+            # Determine timezone to interpret naive datetimes
+            tz_name = os.getenv('TIMEZONE', 'America/New_York')
+            tz = pytz.timezone(tz_name)
+
+            def _parse_iso_to_tz(dt_str: str) -> datetime:
+                # Ensure we have a datetime portion
+                if 'T' not in dt_str:
+                    dt_str = dt_str + 'T00:00:00'
+                # Parse; fromisoformat supports offsets if present
+                parsed = datetime.fromisoformat(dt_str)
+                if parsed.tzinfo is None:
+                    # Localize naive datetimes to configured timezone
+                    parsed = tz.localize(parsed)
+                return parsed
+
+            time_min_dt = _parse_iso_to_tz(start_date)
+            time_max_dt = _parse_iso_to_tz(end_date)
+
+            # Use RFC3339 strings with offset (isoformat includes offset for tz-aware)
+            time_min = time_min_dt.isoformat()
+            time_max = time_max_dt.isoformat()
+
+            # Fetch busy times; include timezone in the request
             body = {
                 "timeMin": time_min,
                 "timeMax": time_max,
+                "timeZone": tz_name,
                 "items": [{"id": self.calendar_id}]
             }
-            
+
             events_result = self.service.freebusy().query(body=body).execute()
-            busy_times = events_result['calendars'][self.calendar_id]['busy']
-            
+            busy_times = events_result['calendars'][self.calendar_id].get('busy', [])
+
             # Calculate free slots
             free_slots = []
-            current_time = datetime.fromisoformat(start_date)
-            end_time = datetime.fromisoformat(end_date)
-            
+            current_time = time_min_dt
+            end_time = time_max_dt
+
             for busy in busy_times:
-                busy_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00'))
-                busy_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00'))
-                
+                # Parse busy intervals (they may be in UTC 'Z' or include offsets)
+                busy_start = datetime.fromisoformat(busy['start'].replace('Z', '+00:00')).astimezone(tz)
+                busy_end = datetime.fromisoformat(busy['end'].replace('Z', '+00:00')).astimezone(tz)
+
                 if current_time < busy_start:
                     free_slots.append({
                         'start': current_time.isoformat(),
                         'end': busy_start.isoformat(),
                         'duration_minutes': int((busy_start - current_time).total_seconds() / 60)
                     })
-                
+
+                # Move current_time forward
                 current_time = max(current_time, busy_end)
-            
+
             # Add final free slot if exists
             if current_time < end_time:
                 free_slots.append({
@@ -340,9 +362,9 @@ Created by Study Planner
                     'end': end_time.isoformat(),
                     'duration_minutes': int((end_time - current_time).total_seconds() / 60)
                 })
-            
+
             return free_slots
-            
+
         except Exception as e:
             print(f"Error fetching free slots: {e}")
             raise Exception(f"Failed to get free slots: {str(e)}")
